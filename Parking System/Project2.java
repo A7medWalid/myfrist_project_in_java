@@ -1,5 +1,6 @@
 import java.time.*;
 import java.util.*;
+import java.util.regex.Pattern;
 
 // Enum for vehicle types
 enum VehicleType {
@@ -31,15 +32,20 @@ class ParkingTicket {
     String ticketId;
     String vehiclePlate;
     LocalDateTime entryTime;
+    LocalDateTime exitTime;
 
     public ParkingTicket(String ticketId, String vehiclePlate) {
         this.ticketId = ticketId;
         this.vehiclePlate = vehiclePlate;
         this.entryTime = LocalDateTime.now();
+        this.exitTime = null;
     }
 
     public String getDetails() {
         return "Ticket ID: " + ticketId + "\nEntry Time: " + entryTime + "\nVehicle Plate: " + vehiclePlate;
+    }
+    public void markExit() {
+        this.exitTime = LocalDateTime.now();
     }
 }
 
@@ -57,6 +63,7 @@ class ParkingSlot {
         this.slotNumber = slotNumber;
         this.type = type;
         this.isOccupied = false;
+        this.ticket = null;
     }
 
     public void parkVehicle(Vehicle vehicle, ParkingTicket ticket) {
@@ -157,7 +164,7 @@ class ParkingLot {
 
             System.out.println("\n✅ Vehicle parked successfully!");
             System.out.println(slot.getDetails());
-            System.out.println("Hourly Rate: $" + rates.get(type));
+            System.out.println("Minutely Rate: $" + rates.get(type));
         } else {
             System.out.println("❌ No available slots for vehicle type: " + type);
         }
@@ -167,21 +174,29 @@ class ParkingLot {
         ParkingSlot slot = slotManager.findSlotByTicket(ticketId);
         System.out.println("\n✅ Vehicle details before un-parking:");
         System.out.println(slot.getDetails());
-
-        double fee = Duration.between(slot.ticket.entryTime, LocalDateTime.now())
-                          .toHours() * Math.max(1, rates.get(slot.type));
+        slot.ticket.markExit();
+        System.out.println("Exit Time: "+ slot.ticket.exitTime);
+        double fee = Duration.between(slot.ticket.entryTime, slot.ticket.exitTime)
+                          .toMinutes() * Math.max(1, rates.get(slot.type));
         slot.unParkVehicle();
 
         System.out.println("Total Fee: $" + fee);
     }
-    public void displayOccupiedAndEmptySlots() {
-        System.out.println("🚗 Parking Slot Details:");
+    public void displayEmptySlots(String type) {
+      try {
+        VehicleType vehicleType = VehicleType.valueOf(type.toUpperCase());  
+        System.out.println("Empty Slots for "+ type + ":");
         for (Map<Integer, ParkingSlot> floorSlots : slotManager.slots.values()) {
            for (ParkingSlot slot : floorSlots.values()) {
-            System.out.println(slot.getDetails());
-           }
+                if(slot.type.equals(vehicleType) && slot.vehicle == null) {
+                    System.out.println("Floor "+ slot.floorNumber + ", Slot "+ slot.slotNumber + " is Empty");
+                }
+            }
         }
+    }catch(IllegalArgumentException e){
+        System.out.println("Invalid vehicle type, Please enter (CAR/BIKE/TRUCK) ");
     }
+}
 
     private String generateTicketId(int floor, int slot) {
         return parkingLotId + "_" + floor + "_" + slot;
@@ -203,7 +218,7 @@ public class Project2 {
             System.out.println("\n1. Park Vehicle");
             System.out.println("2. Unpark Vehicle");
             System.out.println("3. Display All Slots");
-            System.out.println("4. Display Slot Details");
+            System.out.println("4. Display Empty Slots");
             System.out.println("5. Exit");
             System.out.print("Enter your choice: ");
 
@@ -214,8 +229,16 @@ public class Project2 {
                 if (choice == 1) {
                     System.out.print("Enter vehicle type (CAR/BIKE/TRUCK): ");
                     VehicleType type = VehicleType.valueOf(scanner.nextLine().toUpperCase());
-                    System.out.print("Enter vehicle registration number: ");
-                    String regNo = scanner.nextLine();
+                    String regNo;
+                    while(true){
+                    System.out.print("Enter vehicle registration number (Format: ABC-1234): ");
+                    regNo = scanner.nextLine().toUpperCase();
+                    if(Pattern.matches("^[A-Z]{3}-[0-9]{4}$", regNo)){
+                        break;
+                    }else{
+                        System.out.println("Invalid vehicle registration number Format! Please Enter in format: ABC-1234 ");
+                    }
+                    }
                     System.out.print("Enter vehicle color: ");
                     String color = scanner.nextLine();
                     parkingLot.parkVehicle(type, regNo, color);
@@ -230,8 +253,9 @@ public class Project2 {
                     parkingLot.displayAllSlots();
 
                 } else if (choice == 4) {
-                    System.out.println("\nDisplaying Slot Details:");
-                    parkingLot.displayOccupiedAndEmptySlots();
+                    System.out.println("\nEnter vehicle type to display open slots (car/bike/truck): ");
+                    String openType = scanner.nextLine().toUpperCase();
+                    parkingLot.displayEmptySlots(openType);
 
                 } else if (choice == 5) {
                     System.out.println("Goodbye!");
